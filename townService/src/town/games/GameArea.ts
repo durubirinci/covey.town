@@ -1,6 +1,7 @@
 import InvalidParametersError, {
   PLAYER_NOT_IN_GAME_MESSAGE,
 } from '../../lib/InvalidParametersError';
+import { saveGameResultInBackground } from '../../lib/GameResultsStore';
 import Player from '../../lib/Player';
 import {
   GameArea as GameAreaModel,
@@ -45,6 +46,15 @@ export default abstract class GameArea<
   }
 
   protected abstract getType(): InteractableType;
+
+  /**
+   * Records the outcome of a completed game in this area's history, and saves it to the database
+   * (if one is configured).
+   */
+  protected _recordGameResult(result: GameResult): void {
+    this._history.push(result);
+    saveGameResultInBackground({ ...result, gameType: this.getType(), areaID: this.id });
+  }
 
   public remove(player: Player): void {
     if (this._game) {

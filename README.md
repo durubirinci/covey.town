@@ -32,6 +32,21 @@ To create an account and configure your local environment:
 | `TWILIO_API_KEY_SECRET` | The secret for the API key you created.   |
 | `TWILIO_API_AUTH_TOKEN` | Visible on your twilio account dashboard. |
 
+### Saving game results to a database (optional)
+
+The backend can save the result of every completed game (Connect Four, Tic-Tac-Toe) to a [Supabase](https://supabase.com/) Postgres database. Without this configuration, game results are kept in memory only and are lost when the backend restarts.
+
+1. Create a free project at [Supabase](https://supabase.com/).
+2. In the project dashboard, open the SQL Editor, paste in the contents of `townService/supabase/schema.sql`, and run it. This creates a `game_results` table and a `leaderboard` view.
+3. Add the following values to the `.env` file in the `townService` directory (both are under "Project Settings" → "API"):
+
+| Config Value                | Description                                                                 |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `SUPABASE_URL`              | Your project URL, e.g. `https://abcdefgh.supabase.co`.                       |
+| `SUPABASE_SERVICE_ROLE_KEY` | The `service_role` secret key. Keep this private: never put it in the frontend. |
+
+You can then browse saved games in the Supabase Table Editor, or query the `leaderboard` view for wins, losses and ties per player.
+
 ### Starting the backend
 
 Once your backend is configured, you can start it by running `npm start` in the `townService` directory (the first time you run it, you will also need to run `npm install`).

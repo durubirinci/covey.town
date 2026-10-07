@@ -37,7 +37,7 @@ export default class ConnectFourGameArea extends GameArea<ConnectFourGame> {
             this._occupants.find(eachPlayer => eachPlayer.id === red)?.userName || red;
           const yellowName =
             this._occupants.find(eachPlayer => eachPlayer.id === yellow)?.userName || yellow;
-          this._history.push({
+          this._recordGameResult({
             gameID,
             scores: {
               [redName]: updatedState.state.winner === red ? 1 : 0,

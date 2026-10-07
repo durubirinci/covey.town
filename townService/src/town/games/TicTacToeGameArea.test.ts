@@ -16,6 +16,7 @@ import {
 import TicTacToeGameArea from './TicTacToeGameArea';
 import * as TicTacToeGameModule from './TicTacToeGame';
 import Game from './Game';
+import { IGameResultsStore, setGameResultsStore } from '../../lib/GameResultsStore';
 
 class TestingGame extends Game<TicTacToeGameState, TicTacToeMove> {
   public constructor() {
@@ -52,7 +53,10 @@ describe('TicTacToeGameArea', () => {
   let player2: Player;
   let interactableUpdateSpy: jest.SpyInstance;
   let game: TestingGame;
+  let gameResultsStore: IGameResultsStore;
   beforeEach(() => {
+    gameResultsStore = mock<IGameResultsStore>();
+    setGameResultsStore(gameResultsStore);
     const gameConstructorSpy = jest.spyOn(TicTacToeGameModule, 'default');
     game = new TestingGame();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -224,6 +228,23 @@ describe('TicTacToeGameArea', () => {
               },
             });
             expect(interactableUpdateSpy).toHaveBeenCalledTimes(1);
+          });
+          test('saves the result to the game results store', () => {
+            const move: TicTacToeMove = { col: 0, row: 0, gamePiece: 'X' };
+            jest.spyOn(game, 'applyMove').mockImplementationOnce(() => {
+              game.endGame(player1.id);
+            });
+            gameArea.handleCommand({ type: 'GameMove', move, gameID }, player1);
+            expect(gameResultsStore.saveGameResult).toHaveBeenCalledTimes(1);
+            expect(gameResultsStore.saveGameResult).toHaveBeenCalledWith({
+              gameID: game.id,
+              gameType: 'TicTacToeArea',
+              areaID: gameArea.id,
+              scores: {
+                [player1.userName]: 1,
+                [player2.userName]: 0,
+              },
+            });
           });
         });
       });

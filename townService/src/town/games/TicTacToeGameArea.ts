@@ -34,7 +34,7 @@ export default class TicTacToeGameArea extends GameArea<TicTacToeGame> {
         if (x && o) {
           const xName = this._occupants.find(eachPlayer => eachPlayer.id === x)?.userName || x;
           const oName = this._occupants.find(eachPlayer => eachPlayer.id === o)?.userName || o;
-          this._history.push({
+          this._recordGameResult({
             gameID,
             scores: {
               [xName]: updatedState.state.winner === x ? 1 : 0,

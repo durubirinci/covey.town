@@ -19,6 +19,7 @@ import {
   GAME_NOT_IN_PROGRESS_MESSAGE,
   INVALID_COMMAND_MESSAGE,
 } from '../../lib/InvalidParametersError';
+import { IGameResultsStore, setGameResultsStore } from '../../lib/GameResultsStore';
 
 class TestingGame extends Game<ConnectFourGameState, ConnectFourMove> {
   public constructor(priorGame?: ConnectFourGame) {
@@ -59,8 +60,11 @@ describe('ConnectFourGameArea', () => {
   let interactableUpdateSpy: jest.SpyInstance;
   const gameConstructorSpy = jest.spyOn(ConnectFourGameModule, 'default');
   let game: TestingGame;
+  let gameResultsStore: IGameResultsStore;
 
   beforeEach(() => {
+    gameResultsStore = mock<IGameResultsStore>();
+    setGameResultsStore(gameResultsStore);
     gameConstructorSpy.mockClear();
     game = new TestingGame();
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -280,6 +284,23 @@ describe('ConnectFourGameArea', () => {
             },
           });
           expect(interactableUpdateSpy).toHaveBeenCalledTimes(1);
+        });
+        test('saves the result to the game results store', () => {
+          const finalMove: ConnectFourMove = { col: 0, row: 0, gamePiece: 'Red' };
+          jest.spyOn(game, 'applyMove').mockImplementationOnce(() => {
+            game.endGame(red.id);
+          });
+          gameArea.handleCommand({ type: 'GameMove', move: finalMove, gameID }, red);
+          expect(gameResultsStore.saveGameResult).toHaveBeenCalledTimes(1);
+          expect(gameResultsStore.saveGameResult).toHaveBeenCalledWith({
+            gameID: game.id,
+            gameType: 'ConnectFourArea',
+            areaID: gameArea.id,
+            scores: {
+              [red.userName]: 1,
+              [yellow.userName]: 0,
+            },
+          });
         });
       });
     });
