@@ -1,6 +1,10 @@
 import assert from 'assert';
 import Phaser from 'phaser';
-import PlayerController, { MOVEMENT_SPEED } from '../../classes/PlayerController';
+import PlayerController, {
+  MOVEMENT_SPEED,
+  placePlayerLabels,
+} from '../../classes/PlayerController';
+import { formatPlayerStatus, PlayerStatusKind } from '../../classes/PlayerStatus';
 import TownController from '../../classes/TownController';
 import { PlayerLocation } from '../../types/CoveyTownSocket';
 import { Callback } from '../VideoCall/VideoFrontend/types';
@@ -146,10 +150,11 @@ export default class TownGameScene extends Phaser.Scene {
 
     disconnectedPlayers.forEach(disconnectedPlayer => {
       if (disconnectedPlayer.gameObjects) {
-        const { sprite, label } = disconnectedPlayer.gameObjects;
+        const { sprite, label, statusLabel } = disconnectedPlayer.gameObjects;
         if (sprite && label) {
           sprite.destroy();
           label.destroy();
+          statusLabel.destroy();
         }
       }
     });
@@ -199,6 +204,13 @@ export default class TownGameScene extends Phaser.Scene {
   }
 
   update() {
+    // Keep every player's labels attached to their sprite. This runs even while the game is
+    // paused (e.g. a modal is open), because other players keep moving during that time.
+    for (const player of this._players) {
+      if (player.gameObjects?.sprite.body) {
+        placePlayerLabels(player.gameObjects);
+      }
+    }
     if (this._paused) {
       return;
     }
@@ -246,8 +258,6 @@ export default class TownGameScene extends Phaser.Scene {
       gameObjects.sprite.body.velocity.normalize().scale(MOVEMENT_SPEED);
 
       const isMoving = primaryDirection !== undefined;
-      gameObjects.label.setX(body.x);
-      gameObjects.label.setY(body.y - 20);
       const x = gameObjects.sprite.getBounds().centerX;
       const y = gameObjects.sprite.getBounds().centerY;
       //Move the sprite
@@ -281,12 +291,35 @@ export default class TownGameScene extends Phaser.Scene {
         });
         this.coveyTownController.emitMovement(this._lastLocation);
       }
+    }
+  }
 
-      //Update the location for the labels of all of the other players
-      for (const player of this._players) {
-        if (player.gameObjects?.label && player.gameObjects?.sprite.body) {
-          player.gameObjects.label.setX(player.gameObjects.sprite.body.x);
-          player.gameObjects.label.setY(player.gameObjects.sprite.body.y - 20);
+  /**
+   * Creates the (initially hidden) text shown above a player's name label for their status
+   */
+  private _createStatusLabel(x: number, y: number): Phaser.GameObjects.Text {
+    return this.add
+      .text(x, y, '', {
+        font: '14px monospace',
+        color: '#ffffff',
+        backgroundColor: '#2b6cb0',
+        padding: { x: 4, y: 2 },
+      })
+      .setVisible(false);
+  }
+
+  /**
+   * Updates each player's status text and countdown from their status's expiry time
+   */
+  private _refreshStatusLabels() {
+    const now = Date.now();
+    for (const player of this._players) {
+      const gameObjects = player.gameObjects;
+      if (gameObjects) {
+        const text = formatPlayerStatus(player.status, now);
+        gameObjects.statusLabel.setVisible(text !== undefined);
+        if (text !== undefined && gameObjects.statusLabel.text !== text) {
+          gameObjects.statusLabel.setText(text);
         }
       }
     }
@@ -424,9 +457,11 @@ export default class TownGameScene extends Phaser.Scene {
         backgroundColor: '#ffffff',
       })
       .setDepth(6);
+    const statusLabel = this._createStatusLabel(spawnPoint.x, spawnPoint.y - 40).setDepth(6);
     this.coveyTownController.ourPlayer.gameObjects = {
       sprite,
       label,
+      statusLabel,
       locationManagedByGameScene: true,
     };
 
@@ -507,6 +542,32 @@ export default class TownGameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(30);
 
+    // Refresh status countdowns on Phaser's clock. The clock keeps running while the game is
+    // paused (pause() only stops movement and keyboard capture), so countdowns stay live.
+    this.time.addEvent({ delay: 250, loop: true, callback: () => this._refreshStatusLabels() });
+
+    // PROTOTYPE (research task 10): until the status menu exists, set a status from the browser
+    // console in dev mode: setDemoStatus('Focused', 25) for yourself, setDemoStatus('AFK', 5, 'alice')
+    // for one player, or setDemoStatus('On break', 10, 'all') for everyone.
+    // The status is only shown in this browser; the server does not track statuses yet.
+    if (process.env.NEXT_PUBLIC_TOWN_DEV_MODE?.toLowerCase() === 'true') {
+      const devWindow = window as unknown as Record<string, unknown>;
+      // Lets the console (and browser tests) call coveyTownController.pause() / unPause()
+      devWindow.coveyTownController = this.coveyTownController;
+      devWindow.setDemoStatus = (kind: PlayerStatusKind, minutes: number, target?: string) => {
+        const { players, ourPlayer } = this.coveyTownController;
+        let targets = [ourPlayer];
+        if (target === 'all') {
+          targets = players;
+        } else if (target) {
+          targets = players.filter(p => p.userName === target);
+        }
+        targets.forEach(player => {
+          player.status = { kind, expiresAt: Date.now() + minutes * 60_000 };
+        });
+      };
+    }
+
     this._ready = true;
     this.updatePlayers(this.coveyTownController.players);
     // Call any listeners that are waiting for the game to be initialized
@@ -532,9 +593,11 @@ export default class TownGameScene extends Phaser.Scene {
           backgroundColor: '#ffffff',
         },
       );
+      const statusLabel = this._createStatusLabel(player.location.x, player.location.y - 40);
       player.gameObjects = {
         sprite,
         label,
+        statusLabel,
         locationManagedByGameScene: false,
       };
       this._collidingLayers.forEach(layer => this.physics.add.collider(sprite, layer));
