@@ -1,6 +1,7 @@
 import EventEmitter from 'events';
 import TypedEmitter from 'typed-emitter';
 import { Player as PlayerModel, PlayerLocation } from '../types/CoveyTownSocket';
+import { PlayerStatus } from './PlayerStatus';
 export const MOVEMENT_SPEED = 175;
 
 export type PlayerEvents = {
@@ -10,8 +11,21 @@ export type PlayerEvents = {
 export type PlayerGameObjects = {
   sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   label: Phaser.GameObjects.Text;
+  /** A second line above the name label showing the player's status, hidden when there is none */
+  statusLabel: Phaser.GameObjects.Text;
   locationManagedByGameScene: boolean /* For the local player, the game scene will calculate the current location, and we should NOT apply updates when we receive events */;
 };
+/**
+ * Positions a player's name label above their sprite, and their status label above the name label
+ */
+export function placePlayerLabels(gameObjects: PlayerGameObjects): void {
+  const { sprite, label, statusLabel } = gameObjects;
+  label.setX(sprite.body.x);
+  label.setY(sprite.body.y - 20);
+  statusLabel.setX(sprite.body.x);
+  statusLabel.setY(label.y - statusLabel.height);
+}
+
 export default class PlayerController extends (EventEmitter as new () => TypedEmitter<PlayerEvents>) {
   private _location: PlayerLocation;
 
@@ -20,6 +34,9 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
   private readonly _userName: string;
 
   public gameObjects?: PlayerGameObjects;
+
+  /** PROTOTYPE: set locally only; the server does not track statuses yet */
+  public status?: PlayerStatus;
 
   constructor(id: string, userName: string, location: PlayerLocation) {
     super();
@@ -52,7 +69,7 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
 
   private _updateGameComponentLocation() {
     if (this.gameObjects && !this.gameObjects.locationManagedByGameScene) {
-      const { sprite, label } = this.gameObjects;
+      const { sprite } = this.gameObjects;
       if (!sprite.anims) return;
       sprite.setX(this.location.x);
       sprite.setY(this.location.y);
@@ -78,8 +95,7 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
         sprite.anims.stop();
         sprite.setTexture('atlas', `misa-${this.location.rotation}`);
       }
-      label.setX(sprite.body.x);
-      label.setY(sprite.body.y - 20);
+      placePlayerLabels(this.gameObjects);
     }
   }
 
