@@ -4,7 +4,7 @@ import { PlayerStatus } from './PlayerStatus';
 function makeOwner(initial?: PlayerStatus): StatusOwner & { setStatus: jest.Mock } {
   const owner = {
     status: initial,
-    setStatus: jest.fn((newStatus: PlayerStatus | undefined) => {
+    setStatus: jest.fn((newStatus: PlayerStatus) => {
       owner.status = newStatus;
     }),
   };
@@ -13,81 +13,84 @@ function makeOwner(initial?: PlayerStatus): StatusOwner & { setStatus: jest.Mock
 
 describe('AutoAfk', () => {
   const start = 1_000_000;
-  it('does nothing before the player has been idle for 5 minutes', () => {
-    const owner = makeOwner();
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS - 1);
-    expect(owner.setStatus).not.toHaveBeenCalled();
-    expect(tracker.isAutoAfk).toBe(false);
+  const idleAt = start + AUTO_AFK_IDLE_MS;
+  describe('when the player is idle', () => {
+    it('does nothing before 5 idle minutes', () => {
+      const owner = makeOwner();
+      new AutoAfk(owner, start).check(idleAt - 1);
+      expect(owner.setStatus).not.toHaveBeenCalled();
+    });
+    it('marks an Active player AFK after 5 idle minutes', () => {
+      const owner = makeOwner({ kind: 'Active' });
+      new AutoAfk(owner, start).check(idleAt);
+      expect(owner.status).toEqual({ kind: 'AFK' });
+    });
+    it('treats a player with no status yet as Active', () => {
+      const owner = makeOwner();
+      new AutoAfk(owner, start).check(idleAt);
+      expect(owner.status).toEqual({ kind: 'AFK' });
+    });
+    it('marks a Focused player AFK after 5 idle minutes', () => {
+      const owner = makeOwner({ kind: 'Focused', expiresAt: start + 3_600_000 });
+      new AutoAfk(owner, start).check(idleAt);
+      expect(owner.status).toEqual({ kind: 'AFK' });
+    });
+    it('leaves an Away player alone while their timer runs', () => {
+      const owner = makeOwner({ kind: 'Away', expiresAt: start + 3_600_000 });
+      new AutoAfk(owner, start).check(idleAt);
+      expect(owner.setStatus).not.toHaveBeenCalled();
+    });
+    it('counts idle time from the last activity', () => {
+      const owner = makeOwner();
+      const tracker = new AutoAfk(owner, start);
+      tracker.recordActivity(start + 60_000);
+      tracker.check(idleAt);
+      expect(owner.setStatus).not.toHaveBeenCalled();
+      tracker.check(idleAt + 60_000);
+      expect(owner.status).toEqual({ kind: 'AFK' });
+    });
+    it('sets AFK only once while the player stays idle', () => {
+      const owner = makeOwner();
+      const tracker = new AutoAfk(owner, start);
+      tracker.check(idleAt);
+      tracker.check(idleAt + AUTO_AFK_IDLE_MS);
+      expect(owner.setStatus).toHaveBeenCalledTimes(1);
+    });
   });
-  it('marks the player AFK, with no end time, after 5 idle minutes', () => {
-    const owner = makeOwner();
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    expect(owner.status).toEqual({ kind: 'AFK' });
-    expect(tracker.isAutoAfk).toBe(true);
+
+  describe('when the player comes back', () => {
+    it('brings an AFK player back to Active', () => {
+      const owner = makeOwner();
+      const tracker = new AutoAfk(owner, start);
+      tracker.check(idleAt);
+      tracker.recordActivity(idleAt + 1000);
+      expect(owner.status).toEqual({ kind: 'Active' });
+    });
+    it('leaves a Focused or Away player as they are', () => {
+      const focused: PlayerStatus = { kind: 'Focused', expiresAt: start + 3_600_000 };
+      const owner = makeOwner(focused);
+      new AutoAfk(owner, start).recordActivity(start + 1000);
+      expect(owner.setStatus).not.toHaveBeenCalled();
+    });
   });
-  it('counts idle time from the last activity', () => {
-    const owner = makeOwner();
-    const tracker = new AutoAfk(owner, start);
-    tracker.recordActivity(start + 60_000);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    expect(owner.setStatus).not.toHaveBeenCalled();
-    tracker.check(start + 60_000 + AUTO_AFK_IDLE_MS);
-    expect(owner.status).toEqual({ kind: 'AFK' });
-  });
-  it('sets AFK only once while the player stays idle', () => {
-    const owner = makeOwner();
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    tracker.check(start + 2 * AUTO_AFK_IDLE_MS);
-    expect(owner.setStatus).toHaveBeenCalledTimes(1);
-  });
-  it('clears the AFK status when the player comes back with no earlier status', () => {
-    const owner = makeOwner();
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    tracker.recordActivity(start + AUTO_AFK_IDLE_MS + 1000);
-    expect(owner.status).toBeUndefined();
-    expect(tracker.isAutoAfk).toBe(false);
-  });
-  it('puts the earlier status back when the player comes back before it ends', () => {
-    const focused: PlayerStatus = { kind: 'Focused', expiresAt: start + 3_600_000 };
-    const owner = makeOwner(focused);
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    expect(owner.status).toEqual({ kind: 'AFK' });
-    tracker.recordActivity(start + AUTO_AFK_IDLE_MS + 1000);
-    expect(owner.status).toBe(focused);
-  });
-  it('does not put back an earlier status that ended while the player was away', () => {
-    const owner = makeOwner({ kind: 'On break', expiresAt: start + AUTO_AFK_IDLE_MS + 10_000 });
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    tracker.recordActivity(start + AUTO_AFK_IDLE_MS + 20_000);
-    expect(owner.status).toBeUndefined();
-  });
-  it('does not put back an earlier status that had already ended when the player went AFK', () => {
-    const owner = makeOwner({ kind: 'Focused', expiresAt: start + 1000 });
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    tracker.recordActivity(start + AUTO_AFK_IDLE_MS + 1000);
-    expect(owner.status).toBeUndefined();
-  });
-  it('leaves a status the player set themselves while marked AFK', () => {
-    const owner = makeOwner();
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    const picked: PlayerStatus = { kind: 'Focused', expiresAt: start + 3_600_000 };
-    owner.setStatus(picked);
-    tracker.recordActivity(start + AUTO_AFK_IDLE_MS + 1000);
-    expect(owner.status).toBe(picked);
-  });
-  it('does not replace an AFK status the player set themselves', () => {
-    const owner = makeOwner({ kind: 'AFK', expiresAt: start + 3_600_000 });
-    const tracker = new AutoAfk(owner, start);
-    tracker.check(start + AUTO_AFK_IDLE_MS);
-    expect(owner.setStatus).not.toHaveBeenCalled();
-    expect(tracker.isAutoAfk).toBe(false);
+
+  describe('when a timer ends', () => {
+    it('makes a Focused player Active', () => {
+      const owner = makeOwner({ kind: 'Focused', expiresAt: start + 60_000 });
+      new AutoAfk(owner, start).check(start + 60_000);
+      expect(owner.status).toEqual({ kind: 'Active' });
+    });
+    it('makes an Away player AFK if they have been idle', () => {
+      const owner = makeOwner({ kind: 'Away', expiresAt: start + 15 * 60_000 });
+      new AutoAfk(owner, start).check(start + 15 * 60_000);
+      expect(owner.status).toEqual({ kind: 'AFK' });
+    });
+    it('makes an Away player Active if they came back before it ended', () => {
+      const owner = makeOwner({ kind: 'Away', expiresAt: start + 15 * 60_000 });
+      const tracker = new AutoAfk(owner, start);
+      tracker.recordActivity(start + 14 * 60_000);
+      tracker.check(start + 15 * 60_000);
+      expect(owner.status).toEqual({ kind: 'Active' });
+    });
   });
 });

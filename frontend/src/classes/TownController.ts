@@ -483,11 +483,11 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   }
 
   /**
-   * Sets our player's status, or clears it when newStatus is undefined
+   * Sets our player's status
    *
    * @param newStatus
    */
-  public emitStatusChange(newStatus: PlayerStatus | undefined) {
+  public emitStatusChange(newStatus: PlayerStatus) {
     // TODO(task 14): send the status to the townService, so that other players see it
     this.ourPlayer.status = newStatus;
   }

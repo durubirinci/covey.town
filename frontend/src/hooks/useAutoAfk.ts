@@ -8,8 +8,9 @@ const ACTIVITY_EVENTS = ['keydown', 'mousedown', 'mousemove', 'wheel', 'touchsta
 const CHECK_INTERVAL_MS = 1000;
 
 /**
- * Marks our player AFK after 5 minutes without keyboard or mouse use, and puts their previous
- * status back when they come back (task 18). Use it once, in the component that shows the town.
+ * Marks our player AFK after 5 minutes without keyboard or mouse use, back to Active when they
+ * return, and ends their Focused or Away timer when it runs out (task 21). Use it once, in the
+ * component that shows the town.
  *
  * This hook relies on the TownControllerContext.
  */

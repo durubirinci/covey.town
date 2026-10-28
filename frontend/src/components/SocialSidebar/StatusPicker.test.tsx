@@ -13,6 +13,8 @@ describe('StatusPicker', () => {
   const now = 1_700_000_000_000;
   let ourPlayer: PlayerController;
   let townController: TownController;
+  const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+  const currentStatus = () => screen.getByTestId('currentStatus');
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -25,11 +27,9 @@ describe('StatusPicker', () => {
     });
     townController = mock<TownController>();
     Object.defineProperty(townController, 'ourPlayer', { value: ourPlayer });
-    (townController.emitStatusChange as jest.Mock).mockImplementation(
-      (newStatus: PlayerStatus | undefined) => {
-        ourPlayer.status = newStatus;
-      },
-    );
+    (townController.emitStatusChange as jest.Mock).mockImplementation((newStatus: PlayerStatus) => {
+      ourPlayer.status = newStatus;
+    });
     jest.spyOn(useTownController, 'default').mockReturnValue(townController);
     render(
       <ChakraProvider>
@@ -41,55 +41,65 @@ describe('StatusPicker', () => {
     jest.useRealTimers();
   });
 
-  it('shows that no status is set at first, with Clear disabled', () => {
-    expect(screen.getByTestId('currentStatus')).toHaveTextContent('No status set');
-    expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
+  it('starts as Active, with Back to Active disabled', () => {
+    expect(currentStatus()).toHaveTextContent('Active');
+    expect(screen.getByRole('button', { name: 'Back to Active' })).toBeDisabled();
   });
-  it('sends Focused for 25 minutes by default', () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Set status' }));
+  it('asks for a time if none is picked, and keeps the status as it is', () => {
+    click('Set status');
+    expect(screen.getByText('Pick how long first.')).toBeInTheDocument();
+    expect(townController.emitStatusChange).not.toHaveBeenCalled();
+    expect(currentStatus()).toHaveTextContent('Active');
+  });
+  it('hides the missing time message once a time is picked', () => {
+    click('Set status');
+    click('25m');
+    expect(screen.queryByText('Pick how long first.')).not.toBeInTheDocument();
+  });
+  it('sets Focused for the picked time', () => {
+    click('25m');
+    click('Set status');
     expect(townController.emitStatusChange).toHaveBeenCalledWith({
       kind: 'Focused',
       expiresAt: now + 25 * 60_000,
     });
-    expect(screen.getByTestId('currentStatus')).toHaveTextContent('Focused 25:00');
+    expect(currentStatus()).toHaveTextContent('Focused 25:00');
   });
-  it('sends the picked status, duration and working-on text', () => {
-    fireEvent.click(screen.getByRole('button', { name: 'On break' }));
-    fireEvent.click(screen.getByRole('button', { name: '15m' }));
-    fireEvent.change(screen.getByLabelText(/What are you working on/), {
-      target: { value: 'CS490 HW3' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Set status' }));
+  it('sets Away for the picked time', () => {
+    click('Away');
+    click('15m');
+    click('Set status');
     expect(townController.emitStatusChange).toHaveBeenCalledWith({
-      kind: 'On break',
+      kind: 'Away',
       expiresAt: now + 15 * 60_000,
-      workingOn: 'CS490 HW3',
     });
+  });
+  it('asks for a time again for the next status', () => {
+    click('25m');
+    click('Set status');
+    click('Set status');
+    expect(townController.emitStatusChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Pick how long first.')).toBeInTheDocument();
   });
   it('counts down the current status', () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Set status' }));
+    click('25m');
+    click('Set status');
     act(() => {
       jest.advanceTimersByTime(61_000);
     });
-    expect(screen.getByTestId('currentStatus')).toHaveTextContent('Focused 23:59');
+    expect(currentStatus()).toHaveTextContent('Focused 23:59');
   });
-  it('clears the status', () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Set status' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(townController.emitStatusChange).toHaveBeenLastCalledWith(undefined);
-    expect(screen.getByTestId('currentStatus')).toHaveTextContent('No status set');
+  it('goes back to Active', () => {
+    click('25m');
+    click('Set status');
+    click('Back to Active');
+    expect(townController.emitStatusChange).toHaveBeenLastCalledWith({ kind: 'Active' });
+    expect(currentStatus()).toHaveTextContent('Active');
   });
   it('shows a status set elsewhere, such as auto-AFK', () => {
     act(() => {
       ourPlayer.status = { kind: 'AFK' };
     });
-    expect(screen.getByTestId('currentStatus')).toHaveTextContent('AFK');
-  });
-  it('pauses the game while typing, so typing does not move the avatar', () => {
-    const input = screen.getByLabelText(/What are you working on/);
-    fireEvent.focus(input);
-    expect(townController.pause).toHaveBeenCalled();
-    fireEvent.blur(input);
-    expect(townController.unPause).toHaveBeenCalled();
+    expect(currentStatus()).toHaveTextContent('AFK');
   });
 });

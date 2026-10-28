@@ -1,4 +1,4 @@
-import { isStatusActive, PlayerStatus } from './PlayerStatus';
+import { activeStatus, isStatusExpired, PlayerStatus } from './PlayerStatus';
 
 /** How long a player can go without using the keyboard or mouse before they are marked AFK */
 export const AUTO_AFK_IDLE_MS = 5 * 60_000;
@@ -6,26 +6,23 @@ export const AUTO_AFK_IDLE_MS = 5 * 60_000;
 /** Reads and sets the status of our player; TownController provides this */
 export interface StatusOwner {
   readonly status: PlayerStatus | undefined;
-  setStatus(newStatus: PlayerStatus | undefined): void;
-}
-
-function isAutoAfkStatus(status: PlayerStatus | undefined): boolean {
-  return status?.kind === 'AFK' && status.expiresAt === undefined;
+  setStatus(newStatus: PlayerStatus): void;
 }
 
 /**
- * Marks our player AFK after they have been idle for AUTO_AFK_IDLE_MS (task 18), and puts their
- * previous status back when they are active again.
+ * Changes our player's status on its own (task 21):
+ * - Active or Focused players who don't use the keyboard or mouse for AUTO_AFK_IDLE_MS become AFK.
+ * - When an Away timer ends, the player becomes AFK if they are idle, and Active otherwise.
+ * - When a Focused timer ends, the player becomes Active.
+ * - An AFK player becomes Active as soon as they use the keyboard or mouse.
+ *
+ * Away players are not marked AFK while their timer runs, since they already said they are gone.
  *
  * Call recordActivity on every key press or mouse move, and check every second or so. All times
  * are passed in, in milliseconds since the epoch, so the tracker can be tested without timers.
  */
 export default class AutoAfk {
   private _lastActivity: number;
-
-  private _isAutoAfk = false;
-
-  private _statusBeforeAfk?: PlayerStatus;
 
   private readonly _owner: StatusOwner;
 
@@ -37,42 +34,23 @@ export default class AutoAfk {
     this._idleMs = idleMs;
   }
 
-  /** True while the player is AFK because the tracker marked them so */
-  get isAutoAfk(): boolean {
-    return this._isAutoAfk;
-  }
-
-  /**
-   * Notes that the player is active. If they were marked AFK automatically, their previous
-   * status is put back, unless it has expired since or they set a new status in the meantime.
-   */
+  /** Notes that the player is active, and brings an AFK player back to Active */
   recordActivity(now: number): void {
     this._lastActivity = now;
-    if (!this._isAutoAfk) {
-      return;
-    }
-    this._isAutoAfk = false;
-    const previous = this._statusBeforeAfk;
-    this._statusBeforeAfk = undefined;
-    if (isAutoAfkStatus(this._owner.status)) {
-      this._owner.setStatus(isStatusActive(previous, now) ? previous : undefined);
+    if (this._owner.status?.kind === 'AFK') {
+      this._owner.setStatus(activeStatus);
     }
   }
 
-  /**
-   * Marks the player AFK if they have been idle long enough. A player who already set
-   * themselves AFK is left as they are.
-   */
+  /** Ends a timed status that has run out, and marks an idle player AFK */
   check(now: number): void {
-    if (this._isAutoAfk || now - this._lastActivity < this._idleMs) {
-      return;
+    const status = this._owner.status ?? activeStatus;
+    const isIdle = now - this._lastActivity >= this._idleMs;
+    if (isStatusExpired(status, now)) {
+      const goneAfk = status.kind === 'Away' && isIdle;
+      this._owner.setStatus(goneAfk ? { kind: 'AFK' } : activeStatus);
+    } else if (isIdle && (status.kind === 'Active' || status.kind === 'Focused')) {
+      this._owner.setStatus({ kind: 'AFK' });
     }
-    const current = this._owner.status;
-    if (current?.kind === 'AFK' && isStatusActive(current, now)) {
-      return;
-    }
-    this._statusBeforeAfk = isStatusActive(current, now) ? current : undefined;
-    this._isAutoAfk = true;
-    this._owner.setStatus({ kind: 'AFK' });
   }
 }
