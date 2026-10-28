@@ -2,6 +2,7 @@ import { Heading, StackDivider, VStack } from '@chakra-ui/react';
 import React from 'react';
 import InteractableAreasList from './InteractableAreasList';
 import PlayersList from './PlayersList';
+import StatusPicker from './StatusPicker';
 
 export default function SocialSidebar(): JSX.Element {
   return (
@@ -18,6 +19,7 @@ export default function SocialSidebar(): JSX.Element {
       <Heading fontSize='xl' as='h1'>
         Players In This Town
       </Heading>
+      <StatusPicker />
       <PlayersList />
       <InteractableAreasList />
     </VStack>

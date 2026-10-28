@@ -6,6 +6,8 @@ export const MOVEMENT_SPEED = 175;
 
 export type PlayerEvents = {
   movement: (newLocation: PlayerLocation) => void;
+  /** The player's status was set or cleared (cleared is undefined) */
+  statusChange: (newStatus: PlayerStatus | undefined) => void;
 };
 
 export type PlayerGameObjects = {
@@ -35,8 +37,7 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
 
   public gameObjects?: PlayerGameObjects;
 
-  /** PROTOTYPE: set locally only; the server does not track statuses yet */
-  public status?: PlayerStatus;
+  private _status?: PlayerStatus;
 
   constructor(id: string, userName: string, location: PlayerLocation) {
     super();
@@ -53,6 +54,16 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
 
   get location(): PlayerLocation {
     return this._location;
+  }
+
+  set status(newStatus: PlayerStatus | undefined) {
+    this._status = newStatus;
+    this.emit('statusChange', newStatus);
+  }
+
+  /** The player's status; it may have expired, so check it with isStatusActive */
+  get status(): PlayerStatus | undefined {
+    return this._status;
   }
 
   get userName(): string {

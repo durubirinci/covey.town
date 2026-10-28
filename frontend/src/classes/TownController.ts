@@ -43,6 +43,7 @@ import InteractableAreaController, {
 import TicTacToeAreaController from './interactable/TicTacToeAreaController';
 import ViewingAreaController from './interactable/ViewingAreaController';
 import PlayerController from './PlayerController';
+import { PlayerStatus } from './PlayerStatus';
 
 const CALCULATE_NEARBY_PLAYERS_DELAY_MS = 300;
 const SOCKET_COMMAND_TIMEOUT_MS = 5000;
@@ -479,6 +480,16 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     assert(ourPlayer);
     ourPlayer.location = newLocation;
     this.emit('playerMoved', ourPlayer);
+  }
+
+  /**
+   * Sets our player's status, or clears it when newStatus is undefined
+   *
+   * @param newStatus
+   */
+  public emitStatusChange(newStatus: PlayerStatus | undefined) {
+    // TODO(task 14): send the status to the townService, so that other players see it
+    this.ourPlayer.status = newStatus;
   }
 
   /**
