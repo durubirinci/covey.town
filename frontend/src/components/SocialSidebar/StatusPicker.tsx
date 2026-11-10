@@ -6,6 +6,7 @@ import {
   FormErrorMessage,
   FormLabel,
   Heading,
+  Input,
   Text,
   VStack,
 } from '@chakra-ui/react';
@@ -14,11 +15,13 @@ import {
   activeStatus,
   createTimedStatus,
   formatPlayerStatus,
+  MAX_WORKING_ON_LENGTH,
   PlayerStatusKind,
   STATUS_DURATION_MINUTES,
   TIMED_STATUS_KINDS,
 } from '../../classes/PlayerStatus';
 import usePlayerStatus from '../../hooks/usePlayerStatus';
+import usePlayerWorkingOn from '../../hooks/usePlayerWorkingOn';
 import useTownController from '../../hooks/useTownController';
 
 /**
@@ -36,7 +39,8 @@ function useNow(): number {
 /**
  * The status menu (task 20): shows the player's status, lets them pick Focused or Away for a set
  * time, and lets them go back to Active. If they don't pick a time, it asks for one and leaves
- * their status as it is.
+ * their status as it is. Players can also say what they are working on (task 28); the note is
+ * shown above their avatar and kept when their status changes.
  */
 export default function StatusPicker(): JSX.Element {
   const townController = useTownController();
@@ -45,6 +49,8 @@ export default function StatusPicker(): JSX.Element {
   const [kind, setKind] = useState<PlayerStatusKind>('Focused');
   const [minutes, setMinutes] = useState<number | undefined>(undefined);
   const [missingTime, setMissingTime] = useState(false);
+  const workingOn = usePlayerWorkingOn(townController.ourPlayer);
+  const [workingOnDraft, setWorkingOnDraft] = useState<string>(workingOn ?? '');
 
   const current = formatPlayerStatus(status, now);
 
@@ -108,6 +114,41 @@ export default function StatusPicker(): JSX.Element {
             isDisabled={current === undefined}
             onClick={() => townController.emitStatusChange(activeStatus)}>
             Back to Active
+          </Button>
+        </ButtonGroup>
+        <FormControl>
+          <FormLabel htmlFor='workingOn' fontSize='sm' marginBottom={1}>
+            What are you working on? (optional)
+          </FormLabel>
+          <Input
+            id='workingOn'
+            size='sm'
+            placeholder='e.g. CS490 HW3'
+            maxLength={MAX_WORKING_ON_LENGTH}
+            value={workingOnDraft}
+            onChange={e => setWorkingOnDraft(e.target.value)}
+            // Stop the arrow keys and WASD from moving the avatar while typing
+            onFocus={() => townController.pause()}
+            onBlur={() => townController.unPause()}
+          />
+        </FormControl>
+        <ButtonGroup size='sm'>
+          <Button
+            colorScheme='blue'
+            onClick={() => {
+              townController.emitWorkingOnChange(workingOnDraft);
+              setWorkingOnDraft(workingOnDraft.trim());
+            }}>
+            Save note
+          </Button>
+          <Button
+            variant='outline'
+            isDisabled={workingOn === undefined}
+            onClick={() => {
+              townController.emitWorkingOnChange(undefined);
+              setWorkingOnDraft('');
+            }}>
+            Clear note
           </Button>
         </ButtonGroup>
       </VStack>

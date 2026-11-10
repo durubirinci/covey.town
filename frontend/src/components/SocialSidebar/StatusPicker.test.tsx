@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { mock } from 'jest-mock-extended';
 import React from 'react';
 import PlayerController from '../../classes/PlayerController';
-import { PlayerStatus } from '../../classes/PlayerStatus';
+import { cleanWorkingOn, PlayerStatus } from '../../classes/PlayerStatus';
 import TownController from '../../classes/TownController';
 import * as useTownController from '../../hooks/useTownController';
 import StatusPicker from './StatusPicker';
@@ -30,6 +30,11 @@ describe('StatusPicker', () => {
     (townController.emitStatusChange as jest.Mock).mockImplementation((newStatus: PlayerStatus) => {
       ourPlayer.status = newStatus;
     });
+    (townController.emitWorkingOnChange as jest.Mock).mockImplementation(
+      (workingOn: string | undefined) => {
+        ourPlayer.workingOn = cleanWorkingOn(workingOn);
+      },
+    );
     jest.spyOn(useTownController, 'default').mockReturnValue(townController);
     render(
       <ChakraProvider>
@@ -101,5 +106,52 @@ describe('StatusPicker', () => {
       ourPlayer.status = { kind: 'AFK' };
     });
     expect(currentStatus()).toHaveTextContent('AFK');
+  });
+  describe('What are you working on? note (task 28)', () => {
+    const noteInput = () => screen.getByLabelText('What are you working on? (optional)');
+    const type = (text: string) => fireEvent.change(noteInput(), { target: { value: text } });
+
+    it('saves the note', () => {
+      type('CS490 HW3');
+      click('Save note');
+      expect(townController.emitWorkingOnChange).toHaveBeenCalledWith('CS490 HW3');
+      expect(ourPlayer.workingOn).toBe('CS490 HW3');
+    });
+    it('clears the note, and disables Clear note when there is none', () => {
+      expect(screen.getByRole('button', { name: 'Clear note' })).toBeDisabled();
+      type('CS490 HW3');
+      click('Save note');
+      click('Clear note');
+      expect(townController.emitWorkingOnChange).toHaveBeenLastCalledWith(undefined);
+      expect(ourPlayer.workingOn).toBeUndefined();
+      expect(noteInput()).toHaveValue('');
+      expect(screen.getByRole('button', { name: 'Clear note' })).toBeDisabled();
+    });
+    it('clears the note when a blank one is saved', () => {
+      type('CS490 HW3');
+      click('Save note');
+      type('   ');
+      click('Save note');
+      expect(ourPlayer.workingOn).toBeUndefined();
+    });
+    it('limits the note to 60 characters', () => {
+      expect(noteInput()).toHaveAttribute('maxLength', '60');
+    });
+    it('keeps the note when the status changes', () => {
+      type('CS490 HW3');
+      click('Save note');
+      click('25m');
+      click('Set status');
+      act(() => {
+        ourPlayer.status = { kind: 'AFK' };
+      });
+      expect(ourPlayer.workingOn).toBe('CS490 HW3');
+    });
+    it('pauses the game while typing, so the arrow keys do not move the avatar', () => {
+      fireEvent.focus(noteInput());
+      expect(townController.pause).toHaveBeenCalled();
+      fireEvent.blur(noteInput());
+      expect(townController.unPause).toHaveBeenCalled();
+    });
   });
 });

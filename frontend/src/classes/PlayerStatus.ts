@@ -67,3 +67,17 @@ export function createTimedStatus(
 ): PlayerStatus {
   return { kind, expiresAt: now + minutes * 60_000 };
 }
+
+/** The longest "What are you working on?" note a player can set (task 28) */
+export const MAX_WORKING_ON_LENGTH = 60;
+
+/**
+ * Cleans up a "What are you working on?" note: trims spaces and cuts it to MAX_WORKING_ON_LENGTH
+ * characters.
+ *
+ * @returns undefined for a blank note, which clears it
+ */
+export function cleanWorkingOn(text: string | undefined): string | undefined {
+  const trimmed = text?.trim().slice(0, MAX_WORKING_ON_LENGTH).trim();
+  return trimmed || undefined;
+}

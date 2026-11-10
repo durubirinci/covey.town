@@ -1,4 +1,10 @@
-import { createTimedStatus, formatPlayerStatus, isStatusExpired } from './PlayerStatus';
+import {
+  cleanWorkingOn,
+  MAX_WORKING_ON_LENGTH,
+  createTimedStatus,
+  formatPlayerStatus,
+  isStatusExpired,
+} from './PlayerStatus';
 
 describe('formatPlayerStatus', () => {
   const now = 1_000_000;
@@ -44,5 +50,21 @@ describe('createTimedStatus', () => {
       kind: 'Away',
       expiresAt: 1_000_000 + 15 * 60_000,
     });
+  });
+});
+
+describe('cleanWorkingOn', () => {
+  it('trims spaces', () => {
+    expect(cleanWorkingOn('  CS490 HW3  ')).toBe('CS490 HW3');
+  });
+  it('clears a blank or missing note', () => {
+    expect(cleanWorkingOn('')).toBeUndefined();
+    expect(cleanWorkingOn('   ')).toBeUndefined();
+    expect(cleanWorkingOn(undefined)).toBeUndefined();
+  });
+  it('cuts a long note to the maximum length', () => {
+    expect(cleanWorkingOn('a'.repeat(MAX_WORKING_ON_LENGTH + 10))).toBe(
+      'a'.repeat(MAX_WORKING_ON_LENGTH),
+    );
   });
 });
