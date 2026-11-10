@@ -1,13 +1,20 @@
-import { formatPlayerStatus } from './PlayerStatus';
+import {
+  cleanWorkingOn,
+  MAX_WORKING_ON_LENGTH,
+  createTimedStatus,
+  formatPlayerStatus,
+  isStatusExpired,
+} from './PlayerStatus';
 
 describe('formatPlayerStatus', () => {
   const now = 1_000_000;
-  it('returns undefined when there is no status', () => {
+  it('returns undefined for an Active player', () => {
     expect(formatPlayerStatus(undefined, now)).toBeUndefined();
+    expect(formatPlayerStatus({ kind: 'Active' }, now)).toBeUndefined();
   });
-  it('returns undefined once the status has expired', () => {
-    expect(formatPlayerStatus({ kind: 'AFK', expiresAt: now }, now)).toBeUndefined();
-    expect(formatPlayerStatus({ kind: 'AFK', expiresAt: now - 1 }, now)).toBeUndefined();
+  it('returns undefined once a timed status has expired', () => {
+    expect(formatPlayerStatus({ kind: 'Away', expiresAt: now }, now)).toBeUndefined();
+    expect(formatPlayerStatus({ kind: 'Away', expiresAt: now - 1 }, now)).toBeUndefined();
   });
   it('shows minutes and seconds left', () => {
     expect(
@@ -15,11 +22,49 @@ describe('formatPlayerStatus', () => {
     ).toBe('Focused 24:13');
   });
   it('rounds partial seconds up, so the countdown never shows 0:00 while still active', () => {
-    expect(formatPlayerStatus({ kind: 'On break', expiresAt: now + 1 }, now)).toBe('On break 0:01');
+    expect(formatPlayerStatus({ kind: 'Away', expiresAt: now + 1 }, now)).toBe('Away 0:01');
   });
   it('shows hours when an hour or more is left', () => {
     expect(formatPlayerStatus({ kind: 'Focused', expiresAt: now + 3_600_000 }, now)).toBe(
       'Focused 1:00:00',
+    );
+  });
+  it('shows AFK without a countdown', () => {
+    expect(formatPlayerStatus({ kind: 'AFK' }, now)).toBe('AFK');
+  });
+});
+
+describe('isStatusExpired', () => {
+  const now = 1_000_000;
+  it('is true only for a timed status whose end time has passed', () => {
+    expect(isStatusExpired(undefined, now)).toBe(false);
+    expect(isStatusExpired({ kind: 'AFK' }, now)).toBe(false);
+    expect(isStatusExpired({ kind: 'Away', expiresAt: now + 1 }, now)).toBe(false);
+    expect(isStatusExpired({ kind: 'Away', expiresAt: now }, now)).toBe(true);
+  });
+});
+
+describe('createTimedStatus', () => {
+  it('sets the end time from the duration in minutes', () => {
+    expect(createTimedStatus('Away', 15, 1_000_000)).toEqual({
+      kind: 'Away',
+      expiresAt: 1_000_000 + 15 * 60_000,
+    });
+  });
+});
+
+describe('cleanWorkingOn', () => {
+  it('trims spaces', () => {
+    expect(cleanWorkingOn('  CS490 HW3  ')).toBe('CS490 HW3');
+  });
+  it('clears a blank or missing note', () => {
+    expect(cleanWorkingOn('')).toBeUndefined();
+    expect(cleanWorkingOn('   ')).toBeUndefined();
+    expect(cleanWorkingOn(undefined)).toBeUndefined();
+  });
+  it('cuts a long note to the maximum length', () => {
+    expect(cleanWorkingOn('a'.repeat(MAX_WORKING_ON_LENGTH + 10))).toBe(
+      'a'.repeat(MAX_WORKING_ON_LENGTH),
     );
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import Phaser from 'phaser';
 import { useEffect } from 'react';
+import useAutoAfk from '../../hooks/useAutoAfk';
 import useTownController from '../../hooks/useTownController';
 import SocialSidebar from '../SocialSidebar/SocialSidebar';
 import NewConversationModal from './interactables/NewCoversationModal';
@@ -44,6 +45,7 @@ export default function TownMap(): JSX.Element {
   const coveyTownController = useTownController();
   const { isChatWindowOpen } = useChatContext();
   const classes = useStyles();
+  useAutoAfk();
 
   useEffect(() => {
     const config = {

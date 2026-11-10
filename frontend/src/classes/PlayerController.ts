@@ -6,6 +6,10 @@ export const MOVEMENT_SPEED = 175;
 
 export type PlayerEvents = {
   movement: (newLocation: PlayerLocation) => void;
+  /** The player's status was set or cleared (cleared is undefined) */
+  statusChange: (newStatus: PlayerStatus | undefined) => void;
+  /** The player's "What are you working on?" note was set or cleared (cleared is undefined) */
+  workingOnChange: (newWorkingOn: string | undefined) => void;
 };
 
 export type PlayerGameObjects = {
@@ -13,17 +17,23 @@ export type PlayerGameObjects = {
   label: Phaser.GameObjects.Text;
   /** A second line above the name label showing the player's status, hidden when there is none */
   statusLabel: Phaser.GameObjects.Text;
+  /** A line between the name and status labels showing what the player is working on */
+  workingOnLabel: Phaser.GameObjects.Text;
   locationManagedByGameScene: boolean /* For the local player, the game scene will calculate the current location, and we should NOT apply updates when we receive events */;
 };
 /**
- * Positions a player's name label above their sprite, and their status label above the name label
+ * Positions a player's labels above their sprite, stacked upward: name, then what they are
+ * working on (if shown), then their status
  */
 export function placePlayerLabels(gameObjects: PlayerGameObjects): void {
-  const { sprite, label, statusLabel } = gameObjects;
+  const { sprite, label, workingOnLabel, statusLabel } = gameObjects;
   label.setX(sprite.body.x);
   label.setY(sprite.body.y - 20);
+  workingOnLabel.setX(sprite.body.x);
+  workingOnLabel.setY(label.y - workingOnLabel.height);
+  const statusBottom = workingOnLabel.visible ? workingOnLabel.y : label.y;
   statusLabel.setX(sprite.body.x);
-  statusLabel.setY(label.y - statusLabel.height);
+  statusLabel.setY(statusBottom - statusLabel.height);
 }
 
 export default class PlayerController extends (EventEmitter as new () => TypedEmitter<PlayerEvents>) {
@@ -35,8 +45,9 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
 
   public gameObjects?: PlayerGameObjects;
 
-  /** PROTOTYPE: set locally only; the server does not track statuses yet */
-  public status?: PlayerStatus;
+  private _status?: PlayerStatus;
+
+  private _workingOn?: string;
 
   constructor(id: string, userName: string, location: PlayerLocation) {
     super();
@@ -53,6 +64,26 @@ export default class PlayerController extends (EventEmitter as new () => TypedEm
 
   get location(): PlayerLocation {
     return this._location;
+  }
+
+  set status(newStatus: PlayerStatus | undefined) {
+    this._status = newStatus;
+    this.emit('statusChange', newStatus);
+  }
+
+  /** The player's status; it may have expired, so check it with isStatusActive */
+  get status(): PlayerStatus | undefined {
+    return this._status;
+  }
+
+  set workingOn(newWorkingOn: string | undefined) {
+    this._workingOn = newWorkingOn;
+    this.emit('workingOnChange', newWorkingOn);
+  }
+
+  /** What the player said they are working on, e.g. "CS490 HW3"; kept when their status changes */
+  get workingOn(): string | undefined {
+    return this._workingOn;
   }
 
   get userName(): string {

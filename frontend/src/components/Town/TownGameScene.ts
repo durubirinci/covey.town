@@ -150,11 +150,12 @@ export default class TownGameScene extends Phaser.Scene {
 
     disconnectedPlayers.forEach(disconnectedPlayer => {
       if (disconnectedPlayer.gameObjects) {
-        const { sprite, label, statusLabel } = disconnectedPlayer.gameObjects;
+        const { sprite, label, statusLabel, workingOnLabel } = disconnectedPlayer.gameObjects;
         if (sprite && label) {
           sprite.destroy();
           label.destroy();
           statusLabel.destroy();
+          workingOnLabel.destroy();
         }
       }
     });
@@ -309,7 +310,23 @@ export default class TownGameScene extends Phaser.Scene {
   }
 
   /**
-   * Updates each player's status text and countdown from their status's expiry time
+   * Creates the (initially hidden) text shown between a player's name and status labels for what
+   * they are working on
+   */
+  private _createWorkingOnLabel(x: number, y: number): Phaser.GameObjects.Text {
+    return this.add
+      .text(x, y, '', {
+        font: '13px monospace',
+        color: '#22252a',
+        backgroundColor: '#e2e8f0',
+        padding: { x: 4, y: 2 },
+      })
+      .setVisible(false);
+  }
+
+  /**
+   * Updates each player's status text and countdown from their status's expiry time, and what
+   * they are working on
    */
   private _refreshStatusLabels() {
     const now = Date.now();
@@ -320,6 +337,11 @@ export default class TownGameScene extends Phaser.Scene {
         gameObjects.statusLabel.setVisible(text !== undefined);
         if (text !== undefined && gameObjects.statusLabel.text !== text) {
           gameObjects.statusLabel.setText(text);
+        }
+        const { workingOn } = player;
+        gameObjects.workingOnLabel.setVisible(workingOn !== undefined);
+        if (workingOn !== undefined && gameObjects.workingOnLabel.text !== workingOn) {
+          gameObjects.workingOnLabel.setText(workingOn);
         }
       }
     }
@@ -458,10 +480,12 @@ export default class TownGameScene extends Phaser.Scene {
       })
       .setDepth(6);
     const statusLabel = this._createStatusLabel(spawnPoint.x, spawnPoint.y - 40).setDepth(6);
+    const workingOnLabel = this._createWorkingOnLabel(spawnPoint.x, spawnPoint.y - 40).setDepth(6);
     this.coveyTownController.ourPlayer.gameObjects = {
       sprite,
       label,
       statusLabel,
+      workingOnLabel,
       locationManagedByGameScene: true,
     };
 
@@ -594,10 +618,12 @@ export default class TownGameScene extends Phaser.Scene {
         },
       );
       const statusLabel = this._createStatusLabel(player.location.x, player.location.y - 40);
+      const workingOnLabel = this._createWorkingOnLabel(player.location.x, player.location.y - 40);
       player.gameObjects = {
         sprite,
         label,
         statusLabel,
+        workingOnLabel,
         locationManagedByGameScene: false,
       };
       this._collidingLayers.forEach(layer => this.physics.add.collider(sprite, layer));
